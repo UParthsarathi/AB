@@ -16,12 +16,12 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       className={cn(
-        "bg-white border md:min-h-[140px] border-gray-200 rounded-2xl p-6 cursor-pointer",
-        "hover:shadow-lg hover:shadow-gray-100 hover:border-gray-300 transition-all duration-200 flex flex-col justify-between"
+        "bg-white dark:bg-gray-900 border md:min-h-[140px] border-gray-200 dark:border-gray-800 rounded-2xl p-6 cursor-pointer",
+        "hover:shadow-lg hover:shadow-gray-100 dark:hover:shadow-none hover:border-gray-300 dark:hover:border-gray-700 transition-all duration-200 flex flex-col justify-between"
       )}
     >
       <div className="flex justify-between items-start mb-6">
-        <h3 className="font-semibold text-lg text-gray-900">{project.name}</h3>
+        <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">{project.name}</h3>
         {project.status === 'ACTIVE' && (
           <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-tavron-green text-tavron-green-text rounded-full">
             ACTIVE

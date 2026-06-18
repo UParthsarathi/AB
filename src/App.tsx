@@ -37,7 +37,7 @@ export default function App() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-screen bg-[#fafafa] dark:bg-gray-950 transition-colors duration-200">
       <Header />
       
       <main className="w-full relative pb-20">
