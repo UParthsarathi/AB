@@ -149,9 +149,9 @@ export function ProjectDetails({
   const availableEngineers = mockEngineers.filter(me => !project.engineers.find(e => e.id === me.id));
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-8 py-8">
+    <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <button 
           onClick={onBack}
           className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4"
@@ -159,18 +159,18 @@ export function ProjectDetails({
           <ArrowLeft className="w-4 h-4" />
           Back to Projects
         </button>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">{project.name}</h2>
+            <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">{project.name}</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Last updated {formatTimeAgo(project.updatedAt)}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {project.status === 'ACTIVE' ? (
               <button 
                 onClick={() => setCompleteModalOpen(true)}
                 className="text-sm font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-4 py-2 rounded-full hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm"
               >
-                Complete Project
+                Complete<span className="hidden sm:inline"> Project</span>
               </button>
             ) : (
                <button 
