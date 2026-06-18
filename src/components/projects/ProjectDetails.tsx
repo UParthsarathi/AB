@@ -1,0 +1,814 @@
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, Plus, Users, Calendar, FileText, CheckCircle2, Circle, CheckSquare, ListTodo, UploadCloud, Trash2, Undo2, MessageCircle, Send, Image as ImageIcon, X } from 'lucide-react';
+import { Project, Engineer, Milestone, ProjectDoc, MilestoneStatus, EngineerTask, TaskStatus, TaskComment } from '@/types';
+import { formatTimeAgo, generateId, cn } from '@/lib/utils';
+import { mockEngineers } from '@/data';
+import { Modal } from '@/components/ui/Modal';
+import { CompleteProjectModal } from './CompleteProjectModal';
+import { motion } from 'motion/react';
+
+interface ProjectDetailsProps {
+  project: Project;
+  onBack: () => void;
+  onUpdateProject: (projectId: string, updates: Partial<Project>) => void;
+  onDeleteProject: () => void;
+  onAddEngineer: (projectId: string, eng: Engineer) => void;
+  onRemoveEngineer: (projectId: string, engId: string) => void;
+  onAddMilestone: (projectId: string, milestone: Milestone) => void;
+  onUpdateMilestoneStatus: (projectId: string, milestoneId: string, status: MilestoneStatus) => void;
+  onDeleteMilestone: (projectId: string, milestoneId: string) => void;
+  onAddDoc: (projectId: string, doc: ProjectDoc) => void;
+  onDeleteDoc: (projectId: string, docId: string) => void;
+  onAddTask: (projectId: string, task: EngineerTask) => void;
+  onUpdateTaskStatus: (projectId: string, taskId: string, status: TaskStatus) => void;
+  onDeleteTask: (projectId: string, taskId: string) => void;
+  onAddTaskComment: (projectId: string, taskId: string, comment: TaskComment) => void;
+}
+
+export function ProjectDetails({ 
+  project, 
+  onBack, 
+  onUpdateProject, 
+  onDeleteProject,
+  onAddEngineer, 
+  onRemoveEngineer,
+  onAddMilestone, 
+  onUpdateMilestoneStatus,
+  onDeleteMilestone,
+  onAddDoc, 
+  onDeleteDoc,
+  onAddTask,
+  onUpdateTaskStatus,
+  onDeleteTask,
+  onAddTaskComment
+}: ProjectDetailsProps) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'engineers' | 'tasks' | 'milestones' | 'docs'>('overview');
+  
+  // Modals state
+  const [isEngModalOpen, setEngModalOpen] = useState(false);
+  const [isMilestoneModalOpen, setMilestoneModalOpen] = useState(false);
+  const [isDocModalOpen, setDocModalOpen] = useState(false);
+  const [isCompleteModalOpen, setCompleteModalOpen] = useState(false);
+  const [isTaskModalOpen, setTaskModalOpen] = useState(false);
+
+  // Milestone Form
+  const [mTitle, setMTitle] = useState('');
+  const [mDate, setMDate] = useState('');
+
+  // Doc Form
+  const [docUploadMode, setDocUploadMode] = useState<'link' | 'file'>('link');
+  const [dTitle, setDTitle] = useState('');
+  const [dUrl, setDUrl] = useState('');
+  const [dFile, setDFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Task Form
+  const [tTitle, setTTitle] = useState('');
+  const [tEngineerId, setTEngineerId] = useState('');
+
+  // Task Chat
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [taskCommentText, setTaskCommentText] = useState('');
+  const [taskCommentImage, setTaskCommentImage] = useState<File | null>(null);
+  const taskImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSendMessage = (taskId: string, role: 'MANAGER' | 'ENGINEER', authorName: string) => {
+    if (!taskCommentText.trim() && !taskCommentImage) return;
+
+    let imageUrl = undefined;
+    if (taskCommentImage) {
+      imageUrl = URL.createObjectURL(taskCommentImage);
+    }
+
+    onAddTaskComment(project.id, taskId, {
+      id: generateId(),
+      authorRole: role,
+      authorName,
+      content: taskCommentText.trim(),
+      imageUrl,
+      createdAt: new Date().toISOString()
+    });
+    setTaskCommentText('');
+    setTaskCommentImage(null);
+  };
+
+  const submitMilestone = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mTitle || !mDate) return;
+    onAddMilestone(project.id, {
+      id: generateId(),
+      title: mTitle,
+      dueDate: new Date(mDate).toISOString(),
+      status: 'PENDING'
+    });
+    setMTitle(''); setMDate('');
+    setMilestoneModalOpen(false);
+  };
+
+  const submitDoc = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dTitle) return;
+
+    let finalUrl = dUrl;
+    let finalType: 'LINK' | 'DOCUMENT' = 'LINK';
+
+    if (docUploadMode === 'file' && dFile) {
+        finalUrl = URL.createObjectURL(dFile);
+        finalType = 'DOCUMENT';
+    } else {
+        if (!dUrl) return;
+        finalType = dUrl.startsWith('http') ? 'LINK' : 'DOCUMENT';
+    }
+
+    onAddDoc(project.id, {
+      id: generateId(),
+      title: dTitle,
+      url: finalUrl,
+      type: finalType,
+      dateAdded: new Date().toISOString()
+    });
+    setDTitle(''); setDUrl(''); setDFile(null);
+    setDocModalOpen(false);
+  };
+
+  const submitTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tTitle || !tEngineerId) return;
+    onAddTask(project.id, {
+      id: generateId(),
+      title: tTitle,
+      engineerId: tEngineerId,
+      status: 'TODO',
+      createdAt: new Date().toISOString()
+    });
+    setTTitle(''); setTEngineerId('');
+    setTaskModalOpen(false);
+  };
+
+  // Filter available engineers to not show ones already in project
+  const availableEngineers = mockEngineers.filter(me => !project.engineers.find(e => e.id === me.id));
+
+  return (
+    <div className="w-full max-w-5xl mx-auto px-8 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <button 
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Projects
+        </button>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-semibold text-gray-900 tracking-tight">{project.name}</h2>
+            <p className="text-sm text-gray-500 mt-1">Last updated {formatTimeAgo(project.updatedAt)}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {project.status === 'ACTIVE' ? (
+              <button 
+                onClick={() => setCompleteModalOpen(true)}
+                className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                Complete Project
+              </button>
+            ) : (
+               <button 
+                onClick={() => onUpdateProject(project.id, { status: 'ACTIVE', updatedAt: new Date().toISOString() })}
+                className="flex items-center gap-1.5 text-sm font-medium bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-full hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                <Undo2 className="w-4 h-4" /> Re-open
+              </button>
+            )}
+            <button
+              onClick={() => {
+                 if (confirm('Are you sure you want to delete this project?')) {
+                   onDeleteProject();
+                 }
+              }}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+              title="Delete Project"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <span className={cn(
+              "px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full",
+              project.status === 'ACTIVE' ? "bg-tavron-green text-tavron-green-text" : "bg-gray-100 text-gray-600"
+            )}>
+              {project.status}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'overview', label: 'Overview' },
+          { id: 'engineers', label: 'Engineers' },
+          { id: 'tasks', label: 'Tasks' },
+          { id: 'milestones', label: 'Milestones' },
+          { id: 'docs', label: 'Documents' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={cn(
+              "px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+              activeTab === tab.id 
+                ? "border-gray-900 text-gray-900" 
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Contents */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {project.status === 'COMPLETED' && (
+              <div className="bg-tavron-green/50 border border-tavron-green overflow-hidden rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <CheckCircle2 className="w-6 h-6 text-tavron-green-text" />
+                  <h3 className="text-lg font-semibold text-gray-900">Project Completed</h3>
+                </div>
+                <p className="text-sm text-gray-700">
+                  This project was completed on {new Date(project.updatedAt).toLocaleDateString()}.
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm col-span-1">
+                <div className="flex items-center gap-3 text-gray-500 mb-4">
+                  <Users className="w-5 h-5 text-gray-400" />
+                  <h3 className="font-medium">Team Size</h3>
+                </div>
+                <p className="text-3xl font-semibold text-gray-900">{project.engineers.length}</p>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm col-span-1">
+                <div className="flex items-center gap-3 text-gray-500 mb-4">
+                  <ListTodo className="w-5 h-5 text-gray-400" />
+                  <h3 className="font-medium">Open Tasks</h3>
+                </div>
+                <p className="text-3xl font-semibold text-gray-900">
+                  {project.tasks ? project.tasks.filter(t => t.status !== 'DONE').length : 0}
+                </p>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm col-span-1">
+                <div className="flex items-center gap-3 text-gray-500 mb-4">
+                  <Calendar className="w-5 h-5 text-gray-400" />
+                  <h3 className="font-medium">Pending Milestones</h3>
+                </div>
+                <p className="text-3xl font-semibold text-gray-900">
+                  {project.milestones.filter(m => m.status !== 'COMPLETED').length}
+                </p>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm col-span-1">
+                <div className="flex items-center gap-3 text-gray-500 mb-4">
+                  <FileText className="w-5 h-5 text-gray-400" />
+                  <h3 className="font-medium">Attached Docs</h3>
+                </div>
+                <p className="text-3xl font-semibold text-gray-900">{project.docs.length}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'engineers' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Assigned Engineers</h3>
+              <button onClick={() => setEngModalOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
+            {project.engineers.length === 0 ? (
+              <p className="text-gray-500 italic">No engineers assigned yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {project.engineers.map(e => (
+                  <div key={e.id} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between gap-4 group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-semibold uppercase">
+                        {e.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{e.name}</p>
+                        <p className="text-xs text-gray-500">{e.role}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => onRemoveEngineer(project.id, e.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remove Engineer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'tasks' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Engineer Tasks</h3>
+              <button 
+                onClick={() => setTaskModalOpen(true)}
+                disabled={project.engineers.length === 0}
+                className="flex items-center gap-2 text-sm font-medium text-white bg-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Assign Task
+              </button>
+            </div>
+            {(!project.tasks || project.tasks.length === 0) ? (
+              <p className="text-gray-500 italic">
+                {project.engineers.length === 0 ? "Add engineers to the project to start assigning tasks." : "No tasks assigned yet."}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {project.tasks.map(t => {
+                  const assignee = project.engineers.find(e => e.id === t.engineerId);
+                  return (
+                    <div key={t.id} className="bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
+                      <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="pt-0.5">
+                            {t.status === 'DONE' ? (
+                              <CheckSquare className="w-5 h-5 text-tavron-green-text" />
+                            ) : t.status === 'IN_PROGRESS' ? (
+                              <ListTodo className="w-5 h-5 text-amber-500" />
+                            ) : (
+                              <ListTodo className="w-5 h-5 text-gray-300" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className={cn("font-medium", t.status === 'DONE' ? "text-gray-500" : "text-gray-900")}>
+                              {t.title}
+                            </h4>
+                            <div className="flex items-center flex-wrap gap-2 mt-2">
+                              {assignee ? (
+                                <span className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-md">
+                                  <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-bold uppercase">{assignee.name.charAt(0)}</div>
+                                  {assignee.name}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-500">Unassigned</span>
+                              )}
+                              <span className="text-xs text-gray-400">• Created {formatTimeAgo(t.createdAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 md:pl-0 pl-9">
+                          <button
+                            onClick={() => setExpandedTaskId(expandedTaskId === t.id ? null : t.id)}
+                            className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", expandedTaskId === t.id ? "bg-gray-100 text-gray-900" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50")}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            {t.comments?.length ? `${t.comments.length} Messages` : 'Discuss'}
+                          </button>
+
+                          <select
+                            value={t.status}
+                            onChange={(e) => onUpdateTaskStatus(project.id, t.id, e.target.value as TaskStatus)}
+                            className="text-xs font-medium border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 text-gray-700 outline-none focus:ring-2 focus:ring-gray-900"
+                          >
+                            <option value="TODO">To Do</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="DONE">Done</option>
+                          </select>
+                          <button 
+                            onClick={() => onDeleteTask(project.id, t.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            title="Delete Task"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {expandedTaskId === t.id && (
+                        <div className="border-t border-gray-100 bg-gray-50/80 p-5 flex flex-col">
+                          <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2 custom-scrollbar">
+                            {(!t.comments || t.comments.length === 0) ? (
+                              <p className="text-sm text-gray-500 italic text-center py-4">No messages yet. Start the discussion.</p>
+                            ) : (
+                              t.comments.map(c => (
+                                <div key={c.id} className={cn("flex flex-col max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl", c.authorRole === 'MANAGER' ? "bg-gray-900 text-white self-end rounded-br-sm shadow-sm" : "bg-white border border-gray-200 text-gray-900 self-start rounded-bl-sm shadow-sm")}>
+                                  <span className={cn("text-[10px] uppercase font-bold tracking-wider mb-1", c.authorRole === 'MANAGER' ? "text-gray-400" : "text-gray-500")}>
+                                    {c.authorName}
+                                  </span>
+                                  {c.imageUrl && (
+                                    <div className="mb-2 w-full max-w-xs rounded-lg overflow-hidden border border-gray-200/20">
+                                      <img src={c.imageUrl} alt="attachment" className="w-full h-auto object-cover" />
+                                    </div>
+                                  )}
+                                  <span className="text-sm leading-relaxed">{c.content}</span>
+                                  <span className={cn("text-[10px] mt-1.5 self-end flex items-center gap-1.5", c.authorRole === 'MANAGER' ? "text-gray-400" : "text-gray-400")}>
+                                    {new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} at {new Date(c.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          
+                          {taskCommentImage && (
+                            <div className="mb-3 relative group w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-200">
+                              <img src={URL.createObjectURL(taskCommentImage)} alt="Preview" className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => setTaskCommentImage(null)}
+                                className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              ref={taskImageInputRef}
+                              onChange={e => {
+                                if (e.target.files && e.target.files[0]) {
+                                  setTaskCommentImage(e.target.files[0]);
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => taskImageInputRef.current?.click()}
+                              className="p-2.5 h-10 w-10 text-gray-500 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm flex items-center justify-center"
+                              title="Upload Image"
+                            >
+                              <ImageIcon className="w-4 h-4" />
+                            </button>
+                            <input
+                              type="text"
+                              placeholder="Type a message..."
+                              className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 shadow-sm"
+                              value={taskCommentText}
+                              onChange={e => setTaskCommentText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  handleSendMessage(t.id, 'MANAGER', 'Manager');
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => handleSendMessage(t.id, 'MANAGER', 'Manager')}
+                              className="bg-gray-900 text-white p-2.5 h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+                              title="Send as Manager"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                            {assignee && (
+                              <button
+                                onClick={() => handleSendMessage(t.id, 'ENGINEER', assignee.name)}
+                                className="bg-white border border-gray-300 text-gray-700 h-10 px-3 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
+                                title="Simulate Engineer Reply"
+                              >
+                                Eng. Reply
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'milestones' && (
+          <div>
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-lg font-medium text-gray-900">Project Timeline</h3>
+              <button onClick={() => setMilestoneModalOpen(true)} className="flex items-center gap-2 text-sm font-medium text-white bg-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors shadow-sm">
+                <Plus className="w-4 h-4" /> Add Milestone
+              </button>
+            </div>
+            {project.milestones.length === 0 ? (
+              <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center">
+                <Calendar className="w-8 h-8 text-gray-400 mb-3" />
+                <h4 className="text-sm font-medium text-gray-900 mb-1">No milestones yet</h4>
+                <p className="text-sm text-gray-500 max-w-sm">Create milestones to track important project phases, deadlines, and deliverables.</p>
+              </div>
+            ) : (
+              <div className="relative pl-3 md:pl-0 py-4">
+                {/* Vertical Timeline Line (desktop centered, mobile left) */}
+                <div className="absolute left-[27px] md:left-1/2 top-0 bottom-0 w-0.5 bg-gray-200 transform md:-translate-x-1/2" />
+                
+                <div className="space-y-8 relative">
+                  {[...project.milestones].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).map((m, idx) => {
+                    const isEven = idx % 2 === 0;
+                    // Check if it's past due (only comparing date parts to avoid time timezone bugs)
+                    const dueDate = new Date(m.dueDate);
+                    dueDate.setHours(0,0,0,0);
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    const isPastDue = dueDate < today && m.status !== 'COMPLETED';
+                    
+                    return (
+                      <div key={m.id} className={cn("relative flex items-center justify-between md:justify-normal w-full", isEven ? "md:flex-row-reverse" : "md:flex-row")}>
+                        {/* Timeline Node */}
+                        <div className="absolute left-[27px] md:left-1/2 w-8 h-8 rounded-full bg-white border-4 border-gray-100 flex items-center justify-center transform -translate-x-1/2 z-10 shadow-sm">
+                          {m.status === 'COMPLETED' ? (
+                            <CheckCircle2 className="w-5 h-5 text-tavron-green-text bg-white rounded-full" />
+                          ) : (
+                            <Circle className={cn("w-4 h-4", isPastDue ? "text-amber-500 fill-amber-50" : "text-gray-300 fill-gray-50")} />
+                          )}
+                        </div>
+                        
+                        {/* Empty Space for alternate side on desktop */}
+                        <div className="hidden md:block w-1/2" />
+                        
+                        {/* Content Card */}
+                        <div className={cn("w-full md:w-1/2 pl-14 md:pl-0", isEven ? "md:pr-12" : "md:pl-12")}>
+                          <div className={cn(
+                            "p-5 rounded-2xl border transition-all duration-200",
+                            m.status === 'COMPLETED' ? "bg-gray-50 border-gray-200" : 
+                            isPastDue ? "bg-red-50/30 border-red-200 shadow-sm" : "bg-white border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md"
+                          )}>
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                              <div>
+                                <h4 className={cn("font-semibold text-base", m.status === 'COMPLETED' ? "text-gray-500" : "text-gray-900")}>
+                                  {m.title}
+                                </h4>
+                                <div className="flex items-center flex-wrap gap-2 mt-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className={cn("w-3.5 h-3.5", m.status === 'COMPLETED' ? "text-gray-400" : isPastDue ? "text-red-500" : "text-gray-500")} />
+                                    <span className={cn("text-xs font-medium", m.status === 'COMPLETED' ? "text-gray-400" : isPastDue ? "text-red-600" : "text-gray-600")}>
+                                      {new Date(m.dueDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  </div>
+                                  {isPastDue && (
+                                     <span className="text-[10px] uppercase font-bold tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-1">Overdue</span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {m.status !== 'COMPLETED' ? (
+                                <button 
+                                  onClick={() => onUpdateMilestoneStatus(project.id, m.id, 'COMPLETED')}
+                                  className="text-xs font-semibold bg-white hover:bg-tavron-green hover:text-tavron-green-text text-gray-600 border border-gray-200 hover:border-tavron-green-text px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-sm group"
+                                >
+                                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" /> Complete</span>
+                                </button>
+                              ) : (
+                                <button 
+                                  onClick={() => onUpdateMilestoneStatus(project.id, m.id, 'PENDING')}
+                                  className="text-xs font-semibold bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-sm group flex items-center gap-1.5"
+                                >
+                                  <Undo2 className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" /> Undo
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => onDeleteMilestone(project.id, m.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                title="Delete Milestone"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'docs' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Project Documents & Links</h3>
+              <button onClick={() => setDocModalOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
+            {project.docs.length === 0 ? (
+              <p className="text-gray-500 italic">No documents attached.</p>
+            ) : (
+              <div className="space-y-3">
+                {project.docs.map(doc => (
+                  <div key={doc.id} className="bg-white px-5 py-4 rounded-xl border border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <a href={doc.url} target="_blank" rel="noreferrer" className="font-medium text-gray-900 hover:text-blue-600 transition-colors">
+                          {doc.title}
+                        </a>
+                        <p className="text-xs text-gray-500 mt-0.5">{doc.type} • Add {formatTimeAgo(doc.dateAdded)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 font-medium hover:underline">
+                        View
+                      </a>
+                      <button 
+                        onClick={() => onDeleteDoc(project.id, doc.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                        title="Remove Document"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+
+      <Modal isOpen={isEngModalOpen} onClose={() => setEngModalOpen(false)} title="Assign Engineer">
+        <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto">
+          {availableEngineers.length === 0 ? (
+            <p className="text-sm text-gray-500">All available engineers are assigned to this project.</p>
+          ) : (
+            availableEngineers.map(e => (
+              <button 
+                key={e.id}
+                onClick={() => { onAddEngineer(project.id, e); setEngModalOpen(false); }}
+                className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-gray-900 hover:bg-gray-50 transition-all text-left"
+              >
+                <div>
+                  <p className="font-medium text-sm text-gray-900">{e.name}</p>
+                  <p className="text-xs text-gray-500">{e.role}</p>
+                </div>
+                <Plus className="w-4 h-4 text-gray-400" />
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={isMilestoneModalOpen} onClose={() => setMilestoneModalOpen(false)} title="Add Milestone">
+        <form onSubmit={submitMilestone} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">Milestone Title</label>
+            <input
+              type="text"
+              required
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              value={mTitle}
+              onChange={e => setMTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">Due Date</label>
+            <input
+              type="date"
+              required
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              value={mDate}
+              onChange={e => setMDate(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-3 mt-2">
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors">
+              Add Milestone
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isDocModalOpen} onClose={() => setDocModalOpen(false)} title="Attach Document / Link">
+         <form onSubmit={submitDoc} className="flex flex-col gap-5">
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setDocUploadMode('link')}
+              className={cn("flex-1 text-sm font-medium py-1.5 rounded-md transition-colors", docUploadMode === 'link' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+            >
+              External Link
+            </button>
+            <button
+              type="button"
+              onClick={() => setDocUploadMode('file')}
+              className={cn("flex-1 text-sm font-medium py-1.5 rounded-md transition-colors", docUploadMode === 'file' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+            >
+              Upload File
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">Document Title</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Q3 Requirements"
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              value={dTitle}
+              onChange={e => setDTitle(e.target.value)}
+            />
+          </div>
+
+          {docUploadMode === 'link' ? (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">URL / Link</label>
+              <input
+                type="url"
+                required
+                placeholder="https://docs.google.com/..."
+                className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                value={dUrl}
+                onChange={e => setDUrl(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">Select File</label>
+              <div 
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  type="file"
+                  required
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={e => setDFile(e.target.files?.[0] || null)}
+                />
+                <UploadCloud className="w-8 h-8 text-gray-400 mb-2" />
+                {dFile ? (
+                  <span className="text-sm font-medium text-tavron-green-text text-center w-full truncate px-4">{dFile.name}</span>
+                ) : (
+                  <span className="text-sm text-gray-500 font-medium">Click to select a file locally</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 mt-2">
+            <button type="submit" disabled={docUploadMode === 'file' && !dFile} className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors shadow-sm">
+              {docUploadMode === 'link' ? 'Attach Link' : 'Upload Document'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isTaskModalOpen} onClose={() => setTaskModalOpen(false)} title="Assign New Task">
+        <form onSubmit={submitTask} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">Task Description</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Design the database schema"
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              value={tTitle}
+              onChange={e => setTTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">Assign To</label>
+            <select
+              required
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              value={tEngineerId}
+              onChange={e => setTEngineerId(e.target.value)}
+            >
+              <option value="" disabled>Select an engineer...</option>
+              {project.engineers.map(e => (
+                <option key={e.id} value={e.id}>{e.name} — {e.role}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 mt-2">
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors">
+              Create Task
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <CompleteProjectModal 
+        project={project}
+        isOpen={isCompleteModalOpen}
+        onClose={() => setCompleteModalOpen(false)}
+        onConfirm={() => {
+          onUpdateProject(project.id, { status: 'COMPLETED', updatedAt: new Date().toISOString() });
+          setCompleteModalOpen(false);
+        }}
+      />
+    </div>
+  );
+}
