@@ -1,4 +1,4 @@
-import { Engineer, Project } from '../types';
+import { Engineer, Project } from './types';
 
 export const mockEngineers: Engineer[] = [
   { id: 'eng-1', name: 'Alice Chen', email: 'alice.c@tavron.com', role: 'Lead Engineer' },
@@ -34,7 +34,9 @@ export const initialProjects: Project[] = [
     createdAt: new Date(Date.now() - 18 * 86400000).toISOString(), // 18 days ago
     updatedAt: new Date(Date.now() - 18 * 86400000).toISOString(),
     engineers: [mockEngineers[1]],
-    milestones: [],
+    milestones: [
+      { id: 'm-k1', title: 'Initial System Handshake', dueDate: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'PENDING' }
+    ],
     docs: [],
     tasks: []
   },

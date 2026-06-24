@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 import { Header } from '@/components/layout/Header';
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { ProjectList } from '@/components/projects/ProjectList';
 import { ProjectDetails } from '@/components/projects/ProjectDetails';
 import { CreateProjectModal } from '@/components/projects/CreateProjectModal';
+import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
+import { QuickActionsView } from '@/components/actions/QuickActionsView';
+import { AddEngineerView } from '@/components/actions/AddEngineerView';
+import { AccountView } from '@/components/account/AccountView';
+import { MessagesView } from '@/components/messages/MessagesView';
 import { useProjects } from '@/hooks/useProjects';
-import { Project } from '@/types';
+import { Undo2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Undo2, X } from 'lucide-react';
+
+// End of imports
 
 export default function App() {
   const { 
@@ -31,17 +38,54 @@ export default function App() {
   
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'projects' | 'dashboard' | 'actions' | 'account' | 'messages' | 'add_engineer'>('projects');
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
 
   const selectedProject = selectedProjectId 
     ? projects.find(p => p.id === selectedProjectId) 
     : null;
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-gray-950 transition-colors duration-200">
-      <Header />
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#0a0a0a] transition-colors duration-200 relative selection:bg-gray-200 dark:selection:bg-gray-800 flex flex-col">
+      {/* Subtle Dot Pattern Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(#e5e5e5_1px,transparent_1px)] dark:bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:24px_24px] opacity-60"></div>
       
-      <main className="w-full relative pb-20">
-        {selectedProject ? (
+      <div className="relative z-10 flex-1 flex flex-col">
+        <Header currentView={currentView} onViewChange={(view) => {
+          setCurrentView(view);
+          if (view === 'dashboard' || view === 'actions' || view === 'account' || view === 'messages') {
+            setSelectedProjectId(null);
+          }
+          if (view !== 'messages') {
+            setSelectedChatId(null);
+          }
+        }} />
+        
+        <main className="w-full relative pb-20 sm:pb-8 flex-1">
+        {currentView === 'messages' ? (
+          <MessagesView 
+            projects={projects} 
+            initialChatId={selectedChatId} 
+            onAddTaskComment={addTaskComment} 
+          />
+        ) : currentView === 'add_engineer' ? (
+          <AddEngineerView onBack={() => setCurrentView('actions')} />
+        ) : currentView === 'account' ? (
+          <AccountView />
+        ) : currentView === 'actions' ? (
+          <QuickActionsView onActionClick={(action) => {
+            if (action === 'Direct Messages' || action === 'Delegate Work') {
+              setCurrentView('messages');
+              setSelectedChatId(null);
+            } else if (action === 'Add Engineer') {
+              setCurrentView('add_engineer');
+            }
+          }} />
+        ) : currentView === 'dashboard' ? (
+          <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
+            <DashboardOverview projects={projects} />
+          </div>
+        ) : selectedProject ? (
           <ProjectDetails 
             project={selectedProject} 
             onBack={() => setSelectedProjectId(null)}
@@ -61,6 +105,10 @@ export default function App() {
             onUpdateTaskStatus={updateTaskStatus}
             onDeleteTask={deleteTask}
             onAddTaskComment={addTaskComment}
+            onDiscussTask={(taskId) => {
+              setSelectedChatId(`task-${taskId}`);
+              setCurrentView('messages');
+            }}
           />
         ) : (
           <ProjectList 
@@ -76,13 +124,25 @@ export default function App() {
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={(newProject) => {
           addProject(newProject);
+          setCurrentView('projects');
           setSelectedProjectId(newProject.id); // optionally go straight to the new project
         }}
       />
 
+      <MobileBottomNav currentView={currentView} onViewChange={(view) => {
+        setCurrentView(view);
+        if (view === 'dashboard' || view === 'actions' || view === 'account' || view === 'messages') {
+          setSelectedProjectId(null);
+        }
+        if (view !== 'messages') {
+            setSelectedChatId(null);
+        }
+      }} />
+
       <AnimatePresence>
         {lastAction && (
           <motion.div 
+            key="toast"
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
@@ -100,6 +160,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

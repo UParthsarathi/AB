@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Plus, Users, Calendar, FileText, CheckCircle2, Circle, CheckSquare, ListTodo, UploadCloud, Trash2, Undo2, MessageCircle, Send, Image as ImageIcon, X } from 'lucide-react';
+import { ArrowLeft, Plus, Users, Calendar, FileText, CircleCheck, Circle, SquareCheck, ListTodo, UploadCloud, Trash2, Undo2, MessageCircle, Send, Image as ImageIcon, X } from 'lucide-react';
 import { Project, Engineer, Milestone, ProjectDoc, MilestoneStatus, EngineerTask, TaskStatus, TaskComment } from '@/types';
 import { formatTimeAgo, generateId, cn } from '@/lib/utils';
 import { mockEngineers } from '@/data';
 import { Modal } from '@/components/ui/Modal';
 import { CompleteProjectModal } from './CompleteProjectModal';
+import { ProjectDocumentsModal } from './ProjectDocumentsModal';
 import { motion } from 'motion/react';
 
 interface ProjectDetailsProps {
@@ -23,6 +24,7 @@ interface ProjectDetailsProps {
   onUpdateTaskStatus: (projectId: string, taskId: string, status: TaskStatus) => void;
   onDeleteTask: (projectId: string, taskId: string) => void;
   onAddTaskComment: (projectId: string, taskId: string, comment: TaskComment) => void;
+  onDiscussTask?: (taskId: string) => void;
 }
 
 export function ProjectDetails({ 
@@ -40,14 +42,15 @@ export function ProjectDetails({
   onAddTask,
   onUpdateTaskStatus,
   onDeleteTask,
-  onAddTaskComment
+  onAddTaskComment,
+  onDiscussTask
 }: ProjectDetailsProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'engineers' | 'tasks' | 'milestones' | 'docs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'engineers' | 'tasks' | 'milestones'>('overview');
   
   // Modals state
   const [isEngModalOpen, setEngModalOpen] = useState(false);
   const [isMilestoneModalOpen, setMilestoneModalOpen] = useState(false);
-  const [isDocModalOpen, setDocModalOpen] = useState(false);
+  const [isViewDocsModalOpen, setViewDocsModalOpen] = useState(false);
   const [isCompleteModalOpen, setCompleteModalOpen] = useState(false);
   const [isTaskModalOpen, setTaskModalOpen] = useState(false);
 
@@ -55,42 +58,9 @@ export function ProjectDetails({
   const [mTitle, setMTitle] = useState('');
   const [mDate, setMDate] = useState('');
 
-  // Doc Form
-  const [docUploadMode, setDocUploadMode] = useState<'link' | 'file'>('link');
-  const [dTitle, setDTitle] = useState('');
-  const [dUrl, setDUrl] = useState('');
-  const [dFile, setDFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Task Form
   const [tTitle, setTTitle] = useState('');
   const [tEngineerId, setTEngineerId] = useState('');
-
-  // Task Chat
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [taskCommentText, setTaskCommentText] = useState('');
-  const [taskCommentImage, setTaskCommentImage] = useState<File | null>(null);
-  const taskImageInputRef = useRef<HTMLInputElement>(null);
-
-  const handleSendMessage = (taskId: string, role: 'MANAGER' | 'ENGINEER', authorName: string) => {
-    if (!taskCommentText.trim() && !taskCommentImage) return;
-
-    let imageUrl = undefined;
-    if (taskCommentImage) {
-      imageUrl = URL.createObjectURL(taskCommentImage);
-    }
-
-    onAddTaskComment(project.id, taskId, {
-      id: generateId(),
-      authorRole: role,
-      authorName,
-      content: taskCommentText.trim(),
-      imageUrl,
-      createdAt: new Date().toISOString()
-    });
-    setTaskCommentText('');
-    setTaskCommentImage(null);
-  };
 
   const submitMilestone = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,32 +73,6 @@ export function ProjectDetails({
     });
     setMTitle(''); setMDate('');
     setMilestoneModalOpen(false);
-  };
-
-  const submitDoc = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dTitle) return;
-
-    let finalUrl = dUrl;
-    let finalType: 'LINK' | 'DOCUMENT' = 'LINK';
-
-    if (docUploadMode === 'file' && dFile) {
-        finalUrl = URL.createObjectURL(dFile);
-        finalType = 'DOCUMENT';
-    } else {
-        if (!dUrl) return;
-        finalType = dUrl.startsWith('http') ? 'LINK' : 'DOCUMENT';
-    }
-
-    onAddDoc(project.id, {
-      id: generateId(),
-      title: dTitle,
-      url: finalUrl,
-      type: finalType,
-      dateAdded: new Date().toISOString()
-    });
-    setDTitle(''); setDUrl(''); setDFile(null);
-    setDocModalOpen(false);
   };
 
   const submitTask = (e: React.FormEvent) => {
@@ -149,9 +93,9 @@ export function ProjectDetails({
   const availableEngineers = mockEngineers.filter(me => !project.engineers.find(e => e.id === me.id));
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-8 py-4 sm:py-8">
       {/* Header */}
-      <div className="mb-6 sm:mb-8">
+      <div className="mb-4 sm:mb-8">
         <button 
           onClick={onBack}
           className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4"
@@ -164,7 +108,13 @@ export function ProjectDetails({
             <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">{project.name}</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Last updated {formatTimeAgo(project.updatedAt)}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button 
+              onClick={() => setViewDocsModalOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-medium bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
+            >
+              <FileText className="w-4 h-4" /> Documents
+            </button>
             {project.status === 'ACTIVE' ? (
               <button 
                 onClick={() => setCompleteModalOpen(true)}
@@ -193,7 +143,7 @@ export function ProjectDetails({
             </button>
             <span className={cn(
               "px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full",
-              project.status === 'ACTIVE' ? "bg-tavron-green text-tavron-green-text" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+              project.status === 'ACTIVE' ? "bg-brand-green text-brand-green-text" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
             )}>
               {project.status}
             </span>
@@ -202,19 +152,18 @@ export function ProjectDetails({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-8 overflow-x-auto no-scrollbar">
+      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 sm:mb-8 overflow-x-auto no-scrollbar">
         {[
           { id: 'overview', label: 'Overview' },
           { id: 'engineers', label: 'Engineers' },
           { id: 'tasks', label: 'Tasks' },
-          { id: 'milestones', label: 'Milestones' },
-          { id: 'docs', label: 'Documents' }
+          { id: 'milestones', label: 'Milestones' }
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+              "px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
               activeTab === tab.id 
                 ? "border-gray-900 dark:border-white text-gray-900 dark:text-white" 
                 : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -233,11 +182,11 @@ export function ProjectDetails({
         transition={{ duration: 0.2 }}
       >
         {activeTab === 'overview' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {project.status === 'COMPLETED' && (
-              <div className="bg-tavron-green/50 dark:bg-tavron-green/10 border border-tavron-green dark:border-tavron-green/20 overflow-hidden rounded-2xl p-6">
+              <div className="bg-brand-green/50 dark:bg-brand-green/10 border border-brand-green dark:border-brand-green/20 overflow-hidden rounded-xl sm:rounded-2xl p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-2">
-                  <CheckCircle2 className="w-6 h-6 text-tavron-green-text" />
+                  <CircleCheck className="w-6 h-6 text-brand-green-text" />
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Project Completed</h3>
                 </div>
                 <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -245,38 +194,38 @@ export function ProjectDetails({
                 </p>
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
-                <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 mb-4">
-                  <Users className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <h3 className="font-medium">Team Size</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
+                <div className="flex items-center gap-2 sm:gap-3 text-gray-500 dark:text-gray-400 mb-2 sm:mb-4">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500" />
+                  <h3 className="text-sm sm:text-base font-medium">Team Size</h3>
                 </div>
-                <p className="text-3xl font-semibold text-gray-900 dark:text-white">{project.engineers.length}</p>
+                <p className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">{project.engineers.length}</p>
               </div>
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
-                <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 mb-4">
-                  <ListTodo className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <h3 className="font-medium">Open Tasks</h3>
+              <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
+                <div className="flex items-center gap-2 sm:gap-3 text-gray-500 dark:text-gray-400 mb-2 sm:mb-4">
+                  <ListTodo className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500" />
+                  <h3 className="text-sm sm:text-base font-medium">Open Tasks</h3>
                 </div>
-                <p className="text-3xl font-semibold text-gray-900 dark:text-white">
+                <p className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">
                   {project.tasks ? project.tasks.filter(t => t.status !== 'DONE').length : 0}
                 </p>
               </div>
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
-                <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 mb-4">
-                  <Calendar className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <h3 className="font-medium">Pending Milestones</h3>
+              <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
+                <div className="flex items-center gap-2 sm:gap-3 text-gray-500 dark:text-gray-400 mb-2 sm:mb-4">
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500" />
+                  <h3 className="text-sm sm:text-base font-medium">Pending Milestones</h3>
                 </div>
-                <p className="text-3xl font-semibold text-gray-900 dark:text-white">
+                <p className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">
                   {project.milestones.filter(m => m.status !== 'COMPLETED').length}
                 </p>
               </div>
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
-                <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 mb-4">
-                  <FileText className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <h3 className="font-medium">Attached Docs</h3>
+              <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm col-span-1">
+                <div className="flex items-center gap-2 sm:gap-3 text-gray-500 dark:text-gray-400 mb-2 sm:mb-4">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500" />
+                  <h3 className="text-sm sm:text-base font-medium">Attached Docs</h3>
                 </div>
-                <p className="text-3xl font-semibold text-gray-900 dark:text-white">{project.docs.length}</p>
+                <p className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">{project.docs.length}</p>
               </div>
             </div>
           </div>
@@ -284,18 +233,18 @@ export function ProjectDetails({
 
         {activeTab === 'engineers' && (
           <div>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Assigned Engineers</h3>
-              <button onClick={() => setEngModalOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100">Assigned Engineers</h3>
+              <button onClick={() => setEngModalOpen(true)} className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                 <Plus className="w-4 h-4" /> Add
               </button>
             </div>
             {project.engineers.length === 0 ? (
               <p className="text-gray-500 dark:text-gray-400 italic">No engineers assigned yet.</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 {project.engineers.map(e => (
-                  <div key={e.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-4 group">
+                  <div key={e.id} className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3 group">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400 font-semibold uppercase">
                         {e.name.charAt(0)}
@@ -345,7 +294,7 @@ export function ProjectDetails({
                         <div className="flex items-start gap-4">
                           <div className="pt-0.5">
                             {t.status === 'DONE' ? (
-                              <CheckSquare className="w-5 h-5 text-tavron-green-text" />
+                              <SquareCheck className="w-5 h-5 text-brand-green-text" />
                             ) : t.status === 'IN_PROGRESS' ? (
                               <ListTodo className="w-5 h-5 text-amber-500" />
                             ) : (
@@ -372,8 +321,12 @@ export function ProjectDetails({
                         
                         <div className="flex items-center gap-2 md:pl-0 pl-9">
                           <button
-                            onClick={() => setExpandedTaskId(expandedTaskId === t.id ? null : t.id)}
-                            className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", expandedTaskId === t.id ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800")}
+                            onClick={() => {
+                              if (onDiscussTask) {
+                                onDiscussTask(t.id);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                           >
                             <MessageCircle className="w-4 h-4" />
                             {t.comments?.length ? `${t.comments.length} Messages` : 'Discuss'}
@@ -397,94 +350,6 @@ export function ProjectDetails({
                           </button>
                         </div>
                       </div>
-
-                      {expandedTaskId === t.id && (
-                        <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50 p-5 flex flex-col">
-                          <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2 custom-scrollbar">
-                            {(!t.comments || t.comments.length === 0) ? (
-                              <p className="text-sm text-gray-500 dark:text-gray-400 italic text-center py-4">No messages yet. Start the discussion.</p>
-                            ) : (
-                              t.comments.map(c => (
-                                <div key={c.id} className={cn("flex flex-col max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl", c.authorRole === 'MANAGER' ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 self-end rounded-br-sm shadow-sm" : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white self-start rounded-bl-sm shadow-sm")}>
-                                  <span className={cn("text-[10px] uppercase font-bold tracking-wider mb-1", c.authorRole === 'MANAGER' ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400")}>
-                                    {c.authorName}
-                                  </span>
-                                  {c.imageUrl && (
-                                    <div className="mb-2 w-full max-w-xs rounded-lg overflow-hidden border border-gray-200/20 dark:border-gray-700/50">
-                                      <img src={c.imageUrl} alt="attachment" className="w-full h-auto object-cover" />
-                                    </div>
-                                  )}
-                                  <span className="text-sm leading-relaxed">{c.content}</span>
-                                  <span className={cn("text-[10px] mt-1.5 self-end flex items-center gap-1.5", c.authorRole === 'MANAGER' ? "text-gray-400 dark:text-gray-500" : "text-gray-400 dark:text-gray-500")}>
-                                    {new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} at {new Date(c.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                                  </span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                          
-                          {taskCommentImage && (
-                            <div className="mb-3 relative group w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700">
-                              <img src={URL.createObjectURL(taskCommentImage)} alt="Preview" className="w-full h-full object-cover" />
-                              <button
-                                onClick={() => setTaskCommentImage(null)}
-                                className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              ref={taskImageInputRef}
-                              onChange={e => {
-                                if (e.target.files && e.target.files[0]) {
-                                  setTaskCommentImage(e.target.files[0]);
-                                }
-                              }}
-                            />
-                            <button
-                              onClick={() => taskImageInputRef.current?.click()}
-                              className="p-2.5 h-10 w-10 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm flex items-center justify-center"
-                              title="Upload Image"
-                            >
-                              <ImageIcon className="w-4 h-4" />
-                            </button>
-                            <input
-                              type="text"
-                              placeholder="Type a message..."
-                              className="flex-1 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2.5 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white shadow-sm"
-                              value={taskCommentText}
-                              onChange={e => setTaskCommentText(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  handleSendMessage(t.id, 'MANAGER', 'Manager');
-                                }
-                              }}
-                            />
-                            <button
-                              onClick={() => handleSendMessage(t.id, 'MANAGER', 'Manager')}
-                              className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 p-2.5 h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm"
-                              title="Send as Manager"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
-                            {assignee && (
-                              <button
-                                onClick={() => handleSendMessage(t.id, 'ENGINEER', assignee.name)}
-                                className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 h-10 px-3 text-xs font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap"
-                                title="Simulate Engineer Reply"
-                              >
-                                Eng. Reply
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -527,7 +392,7 @@ export function ProjectDetails({
                         {/* Timeline Node */}
                         <div className="absolute left-[27px] md:left-1/2 w-8 h-8 rounded-full bg-white dark:bg-gray-950 border-4 border-gray-100 dark:border-gray-900 flex items-center justify-center transform -translate-x-1/2 z-10 shadow-sm">
                           {m.status === 'COMPLETED' ? (
-                            <CheckCircle2 className="w-5 h-5 text-tavron-green-text bg-white dark:bg-gray-900 rounded-full" />
+                            <CircleCheck className="w-5 h-5 text-brand-green-text bg-white dark:bg-gray-900 rounded-full" />
                           ) : (
                             <Circle className={cn("w-4 h-4", isPastDue ? "text-amber-500 fill-amber-50 dark:fill-amber-900/30" : "text-gray-300 dark:text-gray-700 fill-gray-50 dark:fill-gray-800")} />
                           )}
@@ -564,9 +429,9 @@ export function ProjectDetails({
                               {m.status !== 'COMPLETED' ? (
                                 <button 
                                   onClick={() => onUpdateMilestoneStatus(project.id, m.id, 'COMPLETED')}
-                                  className="text-xs font-semibold bg-white dark:bg-gray-900 hover:bg-tavron-green dark:hover:bg-tavron-green/20 hover:text-tavron-green-text text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-tavron-green-text px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-sm group"
+                                  className="text-xs font-semibold bg-white dark:bg-gray-900 hover:bg-brand-green dark:hover:bg-brand-green/20 hover:text-brand-green-text text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-brand-green-text px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-sm group"
                                 >
-                                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" /> Complete</span>
+                                  <span className="flex items-center gap-1.5"><CircleCheck className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" /> Complete</span>
                                 </button>
                               ) : (
                                 <button 
@@ -590,48 +455,6 @@ export function ProjectDetails({
                     );
                   })}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'docs' && (
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Project Documents & Links</h3>
-              <button onClick={() => setDocModalOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                <Plus className="w-4 h-4" /> Add
-              </button>
-            </div>
-            {project.docs.length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400 italic">No documents attached.</p>
-            ) : (
-              <div className="space-y-3">
-                {project.docs.map(doc => (
-                  <div key={doc.id} className="bg-white dark:bg-gray-900 px-5 py-4 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                      <div>
-                        <a href={doc.url} target="_blank" rel="noreferrer" className="font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                          {doc.title}
-                        </a>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{doc.type} • Add {formatTimeAgo(doc.dateAdded)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">
-                        View
-                      </a>
-                      <button 
-                        onClick={() => onDeleteDoc(project.id, doc.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                        title="Remove Document"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </div>
@@ -690,80 +513,13 @@ export function ProjectDetails({
         </form>
       </Modal>
 
-      <Modal isOpen={isDocModalOpen} onClose={() => setDocModalOpen(false)} title="Attach Document / Link">
-         <form onSubmit={submitDoc} className="flex flex-col gap-5">
-          <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setDocUploadMode('link')}
-              className={cn("flex-1 text-sm font-medium py-1.5 rounded-md transition-colors", docUploadMode === 'link' ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300")}
-            >
-              External Link
-            </button>
-            <button
-              type="button"
-              onClick={() => setDocUploadMode('file')}
-              className={cn("flex-1 text-sm font-medium py-1.5 rounded-md transition-colors", docUploadMode === 'file' ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300")}
-            >
-              Upload File
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Document Title</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Q3 Requirements"
-              className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
-              value={dTitle}
-              onChange={e => setDTitle(e.target.value)}
-            />
-          </div>
-
-          {docUploadMode === 'link' ? (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">URL / Link</label>
-              <input
-                type="url"
-                required
-                placeholder="https://docs.google.com/..."
-                className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
-                value={dUrl}
-                onChange={e => setDUrl(e.target.value)}
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Select File</label>
-              <div 
-                className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-600 transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  type="file"
-                  required
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={e => setDFile(e.target.files?.[0] || null)}
-                />
-                <UploadCloud className="w-8 h-8 text-gray-400 dark:text-gray-500 mb-2" />
-                {dFile ? (
-                  <span className="text-sm font-medium text-tavron-green-text text-center w-full truncate px-4">{dFile.name}</span>
-                ) : (
-                  <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Click to select a file locally</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 mt-2">
-            <button type="submit" disabled={docUploadMode === 'file' && !dFile} className="px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 transition-colors shadow-sm">
-              {docUploadMode === 'link' ? 'Attach Link' : 'Upload Document'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <ProjectDocumentsModal
+        project={project}
+        isOpen={isViewDocsModalOpen}
+        onClose={() => setViewDocsModalOpen(false)}
+        onUpdateProject={onUpdateProject}
+        onDeleteDoc={onDeleteDoc}
+      />
 
       <Modal isOpen={isTaskModalOpen} onClose={() => setTaskModalOpen(false)} title="Assign New Task">
         <form onSubmit={submitTask} className="flex flex-col gap-5">

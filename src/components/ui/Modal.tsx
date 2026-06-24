@@ -13,8 +13,8 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
           <motion.div
+            key="modal-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -42,7 +42,6 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
               </div>
             </motion.div>
           </motion.div>
-        </>
       )}
     </AnimatePresence>
   );

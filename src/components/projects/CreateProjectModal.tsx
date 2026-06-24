@@ -23,6 +23,7 @@ export function CreateProjectModal({ isOpen, onClose, onSubmit }: CreateProjectM
       engineers: [],
       milestones: [],
       docs: [],
+      tasks: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
