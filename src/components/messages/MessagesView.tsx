@@ -30,14 +30,18 @@ export function MessagesView({ projects = [], initialChatId = null, onAddTaskCom
 
   // Collect all tasks to form project discussions
   const taskChats = projects.flatMap(p => 
-    p.tasks.map(t => ({
-      id: `task-${t.id}`,
-      name: t.title,
-      role: `Project: ${p.name}`,
-      isTask: true,
-      originalTask: t,
-      project: p
-    }))
+    p.tasks.map(t => {
+      const assignedEngineer = mockEngineers.find(e => e.id === t.engineerId);
+      return {
+        id: `task-${t.id}`,
+        name: t.title,
+        role: `Project: ${p.name}${assignedEngineer ? ` • Assigned to ${assignedEngineer.name}` : ''}`,
+        isTask: true,
+        originalTask: t,
+        project: p,
+        engineer: assignedEngineer
+      };
+    })
   );
 
   const allChats = [
@@ -294,7 +298,7 @@ export function MessagesView({ projects = [], initialChatId = null, onAddTaskCom
                           onAddTaskComment(activeChat.project.id, activeChat.originalTask.id, {
                             id: generateId(),
                             authorRole: 'ENGINEER',
-                            authorName: 'Engineer (Simulated)',
+                            authorName: activeChat.engineer ? activeChat.engineer.name : 'Engineer',
                             content: messageText.trim(),
                             createdAt: new Date().toISOString()
                           });

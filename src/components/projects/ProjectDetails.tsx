@@ -62,6 +62,32 @@ export function ProjectDetails({
   const [tTitle, setTTitle] = useState('');
   const [tEngineerId, setTEngineerId] = useState('');
 
+  // Task Chat
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [taskCommentText, setTaskCommentText] = useState('');
+  const [taskCommentImage, setTaskCommentImage] = useState<File | null>(null);
+  const taskImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSendMessage = (taskId: string, role: 'MANAGER' | 'ENGINEER', authorName: string) => {
+    if (!taskCommentText.trim() && !taskCommentImage) return;
+
+    let imageUrl = undefined;
+    if (taskCommentImage) {
+      imageUrl = URL.createObjectURL(taskCommentImage);
+    }
+
+    onAddTaskComment(project.id, taskId, {
+      id: generateId(),
+      authorRole: role,
+      authorName,
+      content: taskCommentText.trim(),
+      imageUrl,
+      createdAt: new Date().toISOString()
+    });
+    setTaskCommentText('');
+    setTaskCommentImage(null);
+  };
+
   const submitMilestone = (e: React.FormEvent) => {
     e.preventDefault();
     if (!mTitle || !mDate) return;
@@ -321,12 +347,8 @@ export function ProjectDetails({
                         
                         <div className="flex items-center gap-2 md:pl-0 pl-9">
                           <button
-                            onClick={() => {
-                              if (onDiscussTask) {
-                                onDiscussTask(t.id);
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            onClick={() => setExpandedTaskId(expandedTaskId === t.id ? null : t.id)}
+                            className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", expandedTaskId === t.id ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800")}
                           >
                             <MessageCircle className="w-4 h-4" />
                             {t.comments?.length ? `${t.comments.length} Messages` : 'Discuss'}
@@ -350,6 +372,102 @@ export function ProjectDetails({
                           </button>
                         </div>
                       </div>
+
+                      {expandedTaskId === t.id && (
+                        <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50 p-5 flex flex-col">
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white">Task Discussion</h4>
+                            {onDiscussTask && (
+                              <button onClick={() => onDiscussTask(t.id)} className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                                Open in Full Messages View <ArrowLeft className="w-3 h-3 rotate-[135deg]" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2 custom-scrollbar">
+                            {(!t.comments || t.comments.length === 0) ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 italic text-center py-4">No messages yet. Start the discussion.</p>
+                            ) : (
+                              t.comments.map(c => (
+                                <div key={c.id} className={cn("flex flex-col max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl", c.authorRole === 'MANAGER' ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 self-end rounded-br-sm shadow-sm" : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white self-start rounded-bl-sm shadow-sm")}>
+                                  <span className={cn("text-[10px] uppercase font-bold tracking-wider mb-1", c.authorRole === 'MANAGER' ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400")}>
+                                    {c.authorName}
+                                  </span>
+                                  {c.imageUrl && (
+                                    <div className="mb-2 w-full max-w-xs rounded-lg overflow-hidden border border-gray-200/20 dark:border-gray-700/50">
+                                      <img src={c.imageUrl} alt="attachment" className="w-full h-auto object-cover" />
+                                    </div>
+                                  )}
+                                  <span className="text-sm leading-relaxed">{c.content}</span>
+                                  <span className={cn("text-[10px] mt-1.5 self-end flex items-center gap-1.5", c.authorRole === 'MANAGER' ? "text-gray-400 dark:text-gray-500" : "text-gray-400 dark:text-gray-500")}>
+                                    {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          
+                          {taskCommentImage && (
+                            <div className="mb-3 relative group w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700">
+                              <img src={URL.createObjectURL(taskCommentImage)} alt="Preview" className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => setTaskCommentImage(null)}
+                                className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              ref={taskImageInputRef}
+                              onChange={e => {
+                                if (e.target.files && e.target.files[0]) {
+                                  setTaskCommentImage(e.target.files[0]);
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => taskImageInputRef.current?.click()}
+                              className="p-2.5 h-10 w-10 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm flex items-center justify-center"
+                              title="Upload Image"
+                            >
+                              <ImageIcon className="w-4 h-4" />
+                            </button>
+                            <input
+                              type="text"
+                              placeholder="Type a message..."
+                              className="flex-1 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2.5 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white shadow-sm"
+                              value={taskCommentText}
+                              onChange={e => setTaskCommentText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  handleSendMessage(t.id, 'MANAGER', 'Manager');
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => handleSendMessage(t.id, 'MANAGER', 'Manager')}
+                              className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 p-2.5 h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm flex-shrink-0"
+                              title="Send as Manager"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                            {assignee && (
+                              <button
+                                onClick={() => handleSendMessage(t.id, 'ENGINEER', assignee.name)}
+                                className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 h-10 px-3 text-xs font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
+                                title="Simulate Engineer Reply"
+                              >
+                                Eng. Reply
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

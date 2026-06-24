@@ -1,10 +1,10 @@
 import { Engineer, Project } from './types';
 
 export const mockEngineers: Engineer[] = [
-  { id: 'eng-1', name: 'Alice Chen', email: 'alice.c@tavron.com', role: 'Lead Engineer' },
-  { id: 'eng-2', name: 'Bob Smith', email: 'bob.s@tavron.com', role: 'Systems Engineer' },
-  { id: 'eng-3', name: 'Charlie Davis', email: 'charlie.d@tavron.com', role: 'Software Engineer' },
-  { id: 'eng-4', name: 'Diana Prince', email: 'diana.p@tavron.com', role: 'QA Engineer' },
+  { id: 'eng-1', name: 'Aarav Sharma', email: 'aarav.s@tavron.com', role: 'Lead Engineer' },
+  { id: 'eng-2', name: 'Rohan Gupta', email: 'rohan.g@tavron.com', role: 'Systems Engineer' },
+  { id: 'eng-3', name: 'Priya Patel', email: 'priya.p@tavron.com', role: 'Software Engineer' },
+  { id: 'eng-4', name: 'Ananya Reddy', email: 'ananya.r@tavron.com', role: 'QA Engineer' },
 ];
 
 export const initialProjects: Project[] = [
